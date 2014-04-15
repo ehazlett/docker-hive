@@ -16,7 +16,7 @@
 package hive
 
 import (
-        "fmt"
+	"fmt"
 )
 
 const (
@@ -33,5 +33,5 @@ const (
 
 // Returns node key
 func getNodeKey(node string, zone string) string {
-        return fmt.Sprintf("%s:%s:%s", NODE_KEY, zone, node)
+	return fmt.Sprintf("%s:%s:%s", NODE_KEY, zone, node)
 }

@@ -17,6 +17,9 @@ package utils
 
 import (
 	"fmt"
+	"io"
+	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -58,5 +61,49 @@ func CopyHeaders(dst, src http.Header) {
 		for _, v := range vv {
 			dst.Add(k, v)
 		}
+	}
+}
+
+// Proxies request to local Docker instance.
+func ProxyLocalDockerRequest(w http.ResponseWriter, req *http.Request, dockerPath string) {
+	req.ParseForm()
+	params := req.Form
+	path := fmt.Sprintf("%s?%s", req.URL.Path, params.Encode())
+	log.Printf("Proxying Docker request: %s", path)
+	c, err := NewDockerClient(dockerPath)
+	defer c.Close()
+	if err != nil {
+		msg := fmt.Sprintf("Error connecting to Docker: %s", err)
+		log.Println(msg)
+		w.Write([]byte(msg))
+		return
+	}
+	r, err := http.NewRequest(req.Method, path, req.Body)
+	if err != nil {
+		msg := fmt.Sprintf("Error connecting to Docker: %s", err)
+		log.Println(msg)
+		w.Write([]byte(msg))
+		return
+	}
+	resp, err := c.Do(r)
+	if err != nil {
+		msg := fmt.Sprintf("Error connecting to Docker: %s", err)
+		w.WriteHeader(resp.StatusCode)
+		w.Write([]byte(msg))
+		return
+	}
+	contents, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		msg := fmt.Sprintf("Error connecting to Docker: %s", err)
+		log.Println(msg)
+		w.WriteHeader(resp.StatusCode)
+		w.Write([]byte(msg))
+		return
+	}
+	w.WriteHeader(resp.StatusCode)
+	io.WriteString(w, string(contents))
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
 	}
 }

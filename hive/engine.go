@@ -17,13 +17,11 @@ package hive
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"time"
 
@@ -137,8 +135,14 @@ func (e *Engine) Start() (*sync.WaitGroup, error) {
 		Handler: e.Router,
 	}
 
+	// docker router
+	dockerRouter := NewDockerSubrouter(e.Router, e.DockerPath)
+
+	// setup router
 	e.Router.HandleFunc("/ping", e.pingHandler).Methods("GET").Name("ping")
-	e.Router.HandleFunc("/docker/{path:.*}", e.dockerHandler).Methods("GET", "POST", "DELETE").Name("docker")
+	// addon docker router
+	e.Router.Handle("/{apiVersion:v1.*}", dockerRouter.Subrouter).Methods("GET", "PUT", "POST", "DELETE")
+	// index
 	e.Router.HandleFunc("/", e.indexHandler).Methods("GET")
 
 	log.Printf("Server name: %s", e.Name)
@@ -167,26 +171,26 @@ func (e *Engine) Stop() {
 // Checks for master node ; self-elects if missing
 func (e *Engine) checkMasterStatus() {
 	conn := e.redisPool.Get()
-        master, err := redis.String(conn.Do("GET", MASTER_KEY))
-        if err != nil {
-                log.Printf("Assuming master role")
-	        conn.Do("SET", MASTER_KEY, e.Name)
-                // set expiration to avoid the race condition between set
-                // and expiring if server crashes
-	        conn.Do("EXPIRE", MASTER_KEY, MASTER_HEARTBEAT_INTERVAL+1)
-        }
-        // update master heartbeat
-        if master == e.Name {
-	        conn.Do("EXPIRE", MASTER_KEY, MASTER_HEARTBEAT_INTERVAL+1)
-                e.Master = true
-        } else {
-                e.Master = false
-        }
+	master, err := redis.String(conn.Do("GET", MASTER_KEY))
+	if err != nil {
+		log.Printf("Assuming master role")
+		conn.Do("SET", MASTER_KEY, e.Name)
+		// set expiration to avoid the race condition between set
+		// and expiring if server crashes
+		conn.Do("EXPIRE", MASTER_KEY, MASTER_HEARTBEAT_INTERVAL+1)
+	}
+	// update master heartbeat
+	if master == e.Name {
+		conn.Do("EXPIRE", MASTER_KEY, MASTER_HEARTBEAT_INTERVAL+1)
+		e.Master = true
+	} else {
+		e.Master = false
+	}
 }
 
 // Updates node heartbeat ttl
 func (e *Engine) nodeHeartbeat() {
-        key := getNodeKey(e.Name, e.Zone)
+	key := getNodeKey(e.Name, e.Zone)
 	conn := e.redisPool.Get()
 	conn.Do("SET", key, e.ConnectionString())
 	conn.Do("EXPIRE", key, 5)
@@ -212,44 +216,7 @@ func handlerError(msg string, status int, w http.ResponseWriter) {
 
 // Proxies requests to the local Docker daemon
 func (e *Engine) dockerHandler(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	req.ParseForm()
-	params := req.Form
-	path := fmt.Sprintf("/%s?%s", strings.Replace(vars["path"], "docker", "", 1), params.Encode())
-	log.Printf("Received Docker request: %s", path)
-	c, err := utils.NewDockerClient(e.DockerPath)
-	defer c.Close()
-	if err != nil {
-		msg := fmt.Sprintf("Error connecting to Docker: %s", err)
-		log.Println(msg)
-		handlerError(msg, http.StatusInternalServerError, w)
-		return
-	}
-	r, err := http.NewRequest(req.Method, path, req.Body)
-	utils.CopyHeaders(r.Header, req.Header)
-	if err != nil {
-		msg := fmt.Sprintf("Error connecting to Docker: %s", err)
-		log.Println(msg)
-		handlerError(msg, http.StatusInternalServerError, w)
-		return
-	}
-	resp, err := c.Do(r)
-	if err != nil {
-		msg := fmt.Sprintf("Error connecting to Docker: %s", err)
-		log.Println(msg)
-		handlerError(msg, http.StatusInternalServerError, w)
-		return
-	}
-	contents, err := ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
-	if err != nil {
-		msg := fmt.Sprintf("Error connecting to Docker: %s", err)
-		log.Println(msg)
-		handlerError(msg, http.StatusInternalServerError, w)
-		return
-	}
-	w.WriteHeader(resp.StatusCode)
-	w.Write([]byte(contents))
+	utils.ProxyLocalDockerRequest(w, req, e.DockerPath)
 }
 
 func (e *Engine) listenAndServe() {
@@ -269,9 +236,9 @@ run:
 	for {
 		select {
 		case <-masterTick:
-                    go e.checkMasterStatus()
+			go e.checkMasterStatus()
 		case <-heartbeatTick:
-                    go e.nodeHeartbeat()
+			go e.nodeHeartbeat()
 		case <-sig:
 			break run
 		}

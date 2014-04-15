@@ -21,9 +21,9 @@ import (
 )
 
 func TestGetNodeKey(t *testing.T) {
-        testKey := "nodes:testZone:foo"
-        key := getNodeKey("foo", "testZone")
-        if key != testKey {
+	testKey := "nodes:testZone:foo"
+	key := getNodeKey("foo", "testZone")
+	if key != testKey {
 		t.Fatalf("Error: expected %s ; received: %s", testKey, key)
 	}
 }
