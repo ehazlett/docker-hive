@@ -16,10 +16,10 @@
 package utils
 
 import (
+	"fmt"
 	"net"
-        "net/http"
+	"net/http"
 	"net/http/httputil"
-        "fmt"
 
 	"github.com/garyburd/redigo/redis"
 )

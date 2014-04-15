@@ -15,14 +15,23 @@
 */
 package hive
 
-const (
-	CONTAINER_JOB_KEY  = "jobs:containers"
-	HEARTBEAT_INTERVAL = 1
-	IMAGE_JOB_KEY      = "jobs:images"
-	JOB_KEY            = "jobs"
-	JOB_NODE_KEY       = "nodes:jobs"
-	JOB_INTERVAL       = 10
-	MASTER_INTERVAL    = 2
-	MASTER_KEY         = "master"
-	NODE_KEY           = "nodes"
+import (
+        "fmt"
 )
+
+const (
+	CONTAINER_JOB_KEY         = "jobs:containers"
+	IMAGE_JOB_KEY             = "jobs:images"
+	JOB_KEY                   = "jobs"
+	JOB_NODE_KEY              = "nodes:jobs"
+	JOB_INTERVAL              = 10
+	MASTER_HEARTBEAT_INTERVAL = 2
+	MASTER_KEY                = "master"
+	NODE_HEARTBEAT_INTERVAL   = 1
+	NODE_KEY                  = "nodes"
+)
+
+// Returns node key
+func getNodeKey(node string, zone string) string {
+        return fmt.Sprintf("%s:%s:%s", NODE_KEY, zone, node)
+}

@@ -164,6 +164,36 @@ func (e *Engine) Stop() {
 	e.waiter.Done()
 }
 
+// Checks for master node ; self-elects if missing
+func (e *Engine) checkMasterStatus() {
+	conn := e.redisPool.Get()
+        master, err := redis.String(conn.Do("GET", MASTER_KEY))
+        if err != nil {
+                log.Printf("Assuming master role")
+	        conn.Do("SET", MASTER_KEY, e.Name)
+                // set expiration to avoid the race condition between set
+                // and expiring if server crashes
+	        conn.Do("EXPIRE", MASTER_KEY, MASTER_HEARTBEAT_INTERVAL+1)
+        }
+        // update master heartbeat
+        if master == e.Name {
+	        conn.Do("EXPIRE", MASTER_KEY, MASTER_HEARTBEAT_INTERVAL+1)
+                e.Master = true
+        } else {
+                e.Master = false
+        }
+}
+
+// Updates node heartbeat ttl
+func (e *Engine) nodeHeartbeat() {
+        key := getNodeKey(e.Name, e.Zone)
+	conn := e.redisPool.Get()
+	conn.Do("SET", key, e.ConnectionString())
+	conn.Do("EXPIRE", key, 5)
+}
+
+// ---- Handlers ----
+
 // Index handler
 func (e *Engine) indexHandler(w http.ResponseWriter, req *http.Request) {
 	w.Write([]byte(fmt.Sprintf("Docker Hive %s", e.Version)))
@@ -232,14 +262,16 @@ func (e *Engine) run() {
 	sig := make(chan os.Signal)
 	signal.Notify(sig, os.Interrupt)
 
-	heartbeatTick := time.Tick(HEARTBEAT_INTERVAL * time.Second)
-	masterTick := time.Tick(MASTER_INTERVAL * time.Second)
+	heartbeatTick := time.Tick(NODE_HEARTBEAT_INTERVAL * time.Second)
+	masterTick := time.Tick(MASTER_HEARTBEAT_INTERVAL * time.Second)
 
 run:
 	for {
 		select {
 		case <-masterTick:
+                    go e.checkMasterStatus()
 		case <-heartbeatTick:
+                    go e.nodeHeartbeat()
 		case <-sig:
 			break run
 		}

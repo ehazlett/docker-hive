@@ -13,21 +13,17 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 */
-package utils
+package hive
 
 import (
 	_ "log"
-	"net/http"
 	"testing"
 )
 
-func TestCopyHeaders(t *testing.T) {
-	hdr1 := http.Header{}
-	hdr1.Add("foo", "bar")
-	hdr2 := http.Header{}
-	CopyHeaders(hdr2, hdr1)
-	val := hdr2.Get("foo")
-	if val != "bar" {
-		t.Fatalf("Error: expected foo in header. received: %s", hdr2)
+func TestGetNodeKey(t *testing.T) {
+        testKey := "nodes:testZone:foo"
+        key := getNodeKey("foo", "testZone")
+        if key != testKey {
+		t.Fatalf("Error: expected %s ; received: %s", testKey, key)
 	}
 }

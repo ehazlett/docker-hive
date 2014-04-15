@@ -12,7 +12,6 @@ benchmark:
 test:
 	@go test ./...
 fmt:
-	@go fmt .
-	@go fmt ./hive/
+	@go fmt ./...
 clean:
 	@rm -rf docker-hive
