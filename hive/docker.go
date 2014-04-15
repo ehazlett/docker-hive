@@ -124,17 +124,17 @@ type (
 		Ports       PortMap
 	}
 	DockerRouter struct {
-		Subrouter  *mux.Router
-		dockerPath string
+		Subrouter *mux.Router
+		engine    *Engine
 	}
 )
 
 // Returns a new mux subrouter that acts as an adapter to support the Docker API
-func NewDockerSubrouter(router *mux.Router, dockerPath string) *DockerRouter {
-	s := router.PathPrefix("/{apiVersion:v1.*}").Subrouter()
+func NewDockerSubrouter(engine *Engine) *DockerRouter {
+	s := engine.Router.PathPrefix("/{apiVersion:v1.*}").Subrouter()
 	rtr := &DockerRouter{
-		Subrouter:  s,
-		dockerPath: dockerPath,
+		Subrouter: s,
+		engine:    engine,
 	}
 	s.HandleFunc("/info", rtr.dockerInfoHandler).Methods("GET")
 	return rtr
@@ -142,5 +142,5 @@ func NewDockerSubrouter(router *mux.Router, dockerPath string) *DockerRouter {
 
 // Docker: info
 func (r *DockerRouter) dockerInfoHandler(w http.ResponseWriter, req *http.Request) {
-	utils.ProxyLocalDockerRequest(w, req, r.dockerPath)
+	utils.ProxyLocalDockerRequest(w, req, r.engine.DockerPath)
 }

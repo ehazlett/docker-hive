@@ -136,7 +136,7 @@ func (e *Engine) Start() (*sync.WaitGroup, error) {
 	}
 
 	// docker router
-	dockerRouter := NewDockerSubrouter(e.Router, e.DockerPath)
+	dockerRouter := NewDockerSubrouter(e)
 
 	// setup router
 	e.Router.HandleFunc("/ping", e.pingHandler).Methods("GET").Name("ping")
