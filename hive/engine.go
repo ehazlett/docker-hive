@@ -48,6 +48,35 @@ type (
 		Scheduler  Scheduler
 		Master     bool
 	}
+	Image struct {
+		Id          string
+		Created     int64
+		RepoTags    []string
+		Size        int
+		VirtualSize int
+	}
+
+	InfoPort struct {
+		IP          string
+		PrivatePort int
+		PublicPort  int
+		Type        string
+	}
+
+	APIContainer struct {
+		Id      string
+		Created int
+		Image   string
+		Status  string
+		Command string
+		Ports   []InfoPort
+		Names   []string
+		Node    string
+	}
+	ContainerInfo struct {
+		Container  Container
+		ServerName string
+	}
 )
 
 // Creates a new Engine
@@ -124,7 +153,7 @@ func (e *Engine) Start() (*sync.WaitGroup, error) {
 	return e.waiter, nil
 }
 
-// Returns the connection string.
+// Returns the connection string
 func (e *Engine) ConnectionString() string {
 	return fmt.Sprintf("http://%s:%d", e.Host, e.Port)
 }
@@ -145,7 +174,7 @@ func (e *Engine) pingHandler(w http.ResponseWriter, req *http.Request) {
 	w.Write([]byte("pong"))
 }
 
-// Generic error handler.
+// Generic error handler
 func handlerError(msg string, status int, w http.ResponseWriter) {
 	w.WriteHeader(status)
 	w.Write([]byte(msg))
