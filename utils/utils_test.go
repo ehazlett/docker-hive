@@ -25,7 +25,7 @@ func TestCopyHeaders(t *testing.T) {
 	hdr1 := http.Header{}
 	hdr1.Add("foo", "bar")
 	hdr2 := http.Header{}
-	CopyHeaders(hdr2, hdr1)
+	copyHeaders(hdr1, hdr2)
 	val := hdr2.Get("foo")
 	if val != "bar" {
 		t.Fatalf("Error: expected foo in header. received: %s", hdr2)

@@ -136,11 +136,11 @@ func NewDockerSubrouter(engine *Engine) *DockerRouter {
 		Subrouter: s,
 		engine:    engine,
 	}
-	s.HandleFunc("/info", rtr.dockerInfoHandler).Methods("GET")
+	s.HandleFunc("/{.*}", rtr.dockerHandler).Methods("GET", "PUT", "POST", "DELETE")
 	return rtr
 }
 
-// Docker: info
-func (r *DockerRouter) dockerInfoHandler(w http.ResponseWriter, req *http.Request) {
+// Docker: generic handler
+func (r *DockerRouter) dockerHandler(w http.ResponseWriter, req *http.Request) {
 	utils.ProxyLocalDockerRequest(w, req, r.engine.DockerPath)
 }

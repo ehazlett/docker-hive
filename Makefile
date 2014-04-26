@@ -1,6 +1,5 @@
 all:
 	@go build .
-	@go get -d ./...
 
 deps:
 	@go get -d ./...

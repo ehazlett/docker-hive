@@ -25,7 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ehazlett/docker-hive/utils"
 	"github.com/garyburd/redigo/redis"
 	"github.com/gorilla/mux"
 )
@@ -212,11 +211,6 @@ func (e *Engine) pingHandler(w http.ResponseWriter, req *http.Request) {
 func handlerError(msg string, status int, w http.ResponseWriter) {
 	w.WriteHeader(status)
 	w.Write([]byte(msg))
-}
-
-// Proxies requests to the local Docker daemon
-func (e *Engine) dockerHandler(w http.ResponseWriter, req *http.Request) {
-	utils.ProxyLocalDockerRequest(w, req, e.DockerPath)
 }
 
 func (e *Engine) listenAndServe() {

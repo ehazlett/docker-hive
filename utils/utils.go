@@ -18,11 +18,12 @@ package utils
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"sync"
+	"time"
 
 	"github.com/garyburd/redigo/redis"
 )
@@ -30,6 +31,8 @@ import (
 const (
 	DEFAULT_POOL_SIZE = 10
 )
+
+var onExitFlushLoop func()
 
 func NewRedisPool(addr string, port int, password string) *redis.Pool {
 	return redis.NewPool(func() (redis.Conn, error) {
@@ -56,7 +59,7 @@ func NewDockerClient(dockerSocketPath string) (*httputil.ClientConn, error) {
 }
 
 // Utility function for copying HTTP Headers.
-func CopyHeaders(dst, src http.Header) {
+func copyHeaders(src, dst http.Header) {
 	for k, vv := range src {
 		for _, v := range vv {
 			dst.Add(k, v)
@@ -80,30 +83,76 @@ func ProxyLocalDockerRequest(w http.ResponseWriter, req *http.Request, dockerPat
 	}
 	r, err := http.NewRequest(req.Method, path, req.Body)
 	if err != nil {
-		msg := fmt.Sprintf("Error connecting to Docker: %s", err)
+		msg := fmt.Sprintf("Error making request to Docker: %s", err)
 		log.Println(msg)
 		w.Write([]byte(msg))
 		return
 	}
 	resp, err := c.Do(r)
 	if err != nil {
-		msg := fmt.Sprintf("Error connecting to Docker: %s", err)
+		msg := fmt.Sprintf("Error performing request to Docker: %s", err)
 		w.WriteHeader(resp.StatusCode)
 		w.Write([]byte(msg))
 		return
 	}
-	contents, err := ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
-	if err != nil {
-		msg := fmt.Sprintf("Error connecting to Docker: %s", err)
-		log.Println(msg)
-		w.WriteHeader(resp.StatusCode)
-		w.Write([]byte(msg))
-		return
-	}
+	copyHeaders(resp.Header, w.Header())
 	w.WriteHeader(resp.StatusCode)
-	io.WriteString(w, string(contents))
-	if f, ok := w.(http.Flusher); ok {
-		f.Flush()
+	copyResponse(w, resp.Body, time.Duration(0))
+}
+
+// Used from net/http/httputil/reverseproxy.go to handle underlying proxying
+func copyResponse(dst io.Writer, src io.Reader, flushInterval time.Duration) {
+	if flushInterval != 0 {
+		if wf, ok := dst.(writeFlusher); ok {
+			mlw := &maxLatencyWriter{
+				dst:     wf,
+				latency: flushInterval,
+				done:    make(chan bool),
+			}
+			go mlw.flushLoop()
+			defer mlw.stop()
+			dst = mlw
+		}
+	}
+
+	io.Copy(dst, src)
+}
+
+type writeFlusher interface {
+	io.Writer
+	http.Flusher
+}
+
+type maxLatencyWriter struct {
+	dst     writeFlusher
+	latency time.Duration
+
+	lk   sync.Mutex // protects Write + Flush
+	done chan bool
+}
+
+func (m *maxLatencyWriter) Write(p []byte) (int, error) {
+	m.lk.Lock()
+	defer m.lk.Unlock()
+	return m.dst.Write(p)
+}
+
+func (m *maxLatencyWriter) flushLoop() {
+	t := time.NewTicker(m.latency)
+	defer t.Stop()
+	for {
+		select {
+		case <-m.done:
+			if onExitFlushLoop != nil {
+				onExitFlushLoop()
+			}
+			return
+		case <-t.C:
+			m.lk.Lock()
+			m.dst.Flush()
+			m.lk.Unlock()
+		}
 	}
 }
+
+func (m *maxLatencyWriter) stop() { m.done <- true }
